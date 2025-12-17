@@ -1,0 +1,34 @@
+{
+  "src/*.rs": {
+    "alternate": "tests/{}_test.rs",
+    "type": "source"
+  },
+  "src/**/mod.rs": {
+    "alternate": "tests/{dirname}_test.rs",
+    "type": "source"
+  },
+  "src/**/*.rs": {
+    "alternate": "tests/{dirname}_{basename}_test.rs",
+    "type": "source"
+  },
+  "tests/*_test.rs": {
+    "alternate": "src/{}.rs",
+    "type": "test"
+  },
+  "tests/**/*_test.rs": {
+    "alternate": "src/{dirname}/{basename}.rs",
+    "type": "test"
+  },
+  "src/crypto/mod.rs": {
+    "alternate": "tests/crypto_test.rs"
+  },
+  "src/events/mod.rs": {
+    "alternate": "tests/events_test.rs"
+  },
+  "src/profile/mod.rs": {
+    "alternate": "tests/profile_test.rs"
+  },
+  "src/sync/mod.rs": {
+    "alternate": "tests/sync_test.rs"
+  }
+}

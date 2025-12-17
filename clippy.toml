@@ -1,0 +1,5 @@
+# Complexity limits based on project standards
+cognitive-complexity-threshold = 15
+too-many-arguments-threshold = 5
+too-many-lines-threshold = 50
+type-complexity-threshold = 250

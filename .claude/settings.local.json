@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./target/release/wolfpack:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(cargo build:*)",
+      "Bash(find:*)",
+      "Bash(cargo fmt:*)",
+      "Bash(cargo tarpaulin:*)",
+      "Bash(cargo llvm-cov:*)",
+      "Bash(cargo test:*)",
+      "Bash(RUST_LOG=debug /home/polar/Documents/Projects/github.com/monokrome/wolfpack/target/release/wolfpack:*)",
+      "Bash(ls:*)",
+      "Bash(git tag:*)",
+      "Bash(git push:*)",
+      "Bash(cat:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:lib.rs)"
+    ]
+  }
+}

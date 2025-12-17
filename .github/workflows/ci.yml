@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Run clippy on library and binaries
+        run: |
+          cargo clippy --lib --bins --all-features -- \
+            -D warnings \
+            -W clippy::cognitive_complexity \
+            -W clippy::too_many_lines \
+            -W clippy::too_many_arguments
+      - name: Run clippy on tests (allow test patterns)
+        run: |
+          cargo clippy --tests --all-features -- \
+            -D warnings \
+            -A clippy::unwrap_used \
+            -A clippy::panic
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: cargo test --all-features
+
+  build:
+    name: Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            target: aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+  complexity:
+    name: Complexity Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check cognitive complexity (max 15)
+        run: |
+          cargo clippy --lib --bins -- \
+            -D clippy::cognitive_complexity 2>&1 | tee clippy_output.txt
+          if grep -q "cognitive_complexity" clippy_output.txt; then
+            echo "::error::Cognitive complexity violations found"
+            exit 1
+          fi
+      - name: Check function length (max 50 lines)
+        run: |
+          cargo clippy --lib --bins -- \
+            -D clippy::too_many_lines 2>&1 | tee clippy_output.txt
+          if grep -q "too_many_lines" clippy_output.txt; then
+            echo "::error::Function length violations found"
+            exit 1
+          fi
+      - name: Check argument count (max 5)
+        run: |
+          cargo clippy --lib --bins -- \
+            -D clippy::too_many_arguments 2>&1 | tee clippy_output.txt
+          if grep -q "too_many_arguments" clippy_output.txt; then
+            echo "::error::Too many arguments violations found"
+            exit 1
+          fi

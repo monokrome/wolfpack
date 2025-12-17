@@ -1,0 +1,113 @@
+[package]
+name = "wolfpack"
+version = "0.1.0"
+edition = "2024"
+description = "LibreWolf sync via Syncthing with E2E encryption"
+license = "MIT"
+repository = "https://github.com/monokrome/wolfpack"
+
+[dependencies]
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+
+# Configuration
+prefer = "0.3"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# File watching
+notify = "6"
+
+# Paths
+dirs = "5"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Compression
+lz4_flex = "0.11"  # Mozilla lz4 format
+zstd = "0.13"      # Extension compression
+zip = "2"          # XPI packaging
+
+# Base64 encoding
+base64 = "0.22"
+
+# Encryption
+chacha20poly1305 = "0.10"
+aes-gcm = "0.10"
+x25519-dalek = { version = "2", features = ["static_secrets"] }
+rand = "0.8"
+sha2 = "0.10"
+cpufeatures = "0.2"
+
+# P2P networking
+libp2p = { version = "0.54", features = [
+    "tokio",
+    "noise",
+    "tcp",
+    "quic",
+    "yamux",
+    "mdns",
+    "kad",
+    "relay",
+    "dcutr",
+    "identify",
+    "ping",
+    "request-response",
+    "macros",
+    "ed25519",
+] }
+futures = "0.3"
+void = "1"
+
+# Database
+rusqlite = { version = "0.31", features = ["bundled"] }
+
+# UUIDs
+uuid = { version = "1", features = ["v7", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Error handling
+thiserror = "1"
+anyhow = "1"
+
+# Hex encoding
+hex = "0.4"
+
+# Temp files
+tempfile = "3"
+
+# HTTP API
+axum = "0.7"
+tower-http = { version = "0.5", features = ["cors"] }
+hyper = { version = "1", features = ["server"] }
+
+# HTTP client
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[lints.clippy]
+# Complexity checks
+cognitive_complexity = "warn"
+too_many_arguments = "warn"
+too_many_lines = "warn"
+
+# Code quality
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+
+[[bin]]
+name = "wolfpack"
+path = "src/main.rs"
