@@ -30,6 +30,7 @@ struct DaemonContext {
     node: Node,
     config: Config,
     profile_path: PathBuf,
+    _watcher: FileWatcher, // Keep watcher alive
 }
 
 #[allow(clippy::cognitive_complexity)] // Entry point with multiple initialization checks
@@ -72,6 +73,7 @@ async fn initialize_daemon(
     let node = init_p2p_node(config).await?;
     let profile_path = resolve_profile_path(config)?;
     let watcher = FileWatcher::new(&[profile_path.as_path()])?;
+    let watcher_events = watcher.events.resubscribe();
     let ipc = init_ipc_socket().await?;
 
     // Initial profile scan
@@ -84,9 +86,10 @@ async fn initialize_daemon(
         node,
         config: config.clone(),
         profile_path,
+        _watcher: watcher,
     };
 
-    Ok((ctx, ipc, watcher.events, pairing_rx))
+    Ok((ctx, ipc, watcher_events, pairing_rx))
 }
 
 fn init_keypair() -> Result<KeyPair> {
