@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::config::Config;
 use crate::events::Event;
-use crate::extensions::{install_from_git, install_from_xpi, install_to_profile};
+use crate::extensions::{install_from_xpi, install_to_profile};
 use crate::state::StateDb;
 
 /// Load config or use defaults if it doesn't exist
@@ -11,62 +11,8 @@ fn load_or_default_config(config_path: &Path) -> Config {
     Config::load(config_path).unwrap_or_default()
 }
 
-/// Install an extension from a git repository
-pub fn install_from_git_url(
-    url: &str,
-    ref_spec: Option<&str>,
-    build_cmd: Option<&str>,
-    config_path: &Path,
-) -> Result<()> {
-    let config = load_or_default_config(config_path);
-    let ref_spec = ref_spec.unwrap_or("HEAD");
-
-    println!("Installing extension from {}...", url);
-
-    let result = install_from_git(url, ref_spec, build_cmd)?;
-
-    println!("Built {} v{}", result.name, result.version);
-    println!("Extension ID: {}", result.id);
-
-    // Store in local state
-    let state_path = config.state_db_path();
-    std::fs::create_dir_all(state_path.parent().unwrap_or(Path::new(".")))?;
-    let db = StateDb::open(&state_path)?;
-    db.store_extension_xpi(
-        &result.id,
-        &result.version,
-        &result.source,
-        &result.xpi_data,
-    )?;
-    db.add_extension(&result.id, &result.name, Some(url))?;
-
-    // Install to profile
-    let profile_dir = config.profile_dir()?;
-    install_to_profile(&result.xpi_data, &profile_dir, &result.id)?;
-
-    // Store pending event for daemon to sync
-    store_pending_extension_event(
-        &state_path,
-        Event::ExtensionInstalled {
-            id: result.id.clone(),
-            name: result.name,
-            version: result.version,
-            source: result.source,
-            xpi_data: result.xpi_data,
-        },
-    )?;
-
-    let xpi_path = profile_dir
-        .join("extensions")
-        .join(format!("{}.xpi", result.id));
-    println!("Installed to: {}", xpi_path.display());
-    println!("Restart LibreWolf to activate the extension.");
-
-    Ok(())
-}
-
 /// Install an extension from a local XPI file
-pub fn install_from_local_xpi(xpi_path: &Path, config_path: &Path) -> Result<()> {
+pub fn install_extension(xpi_path: &Path, config_path: &Path) -> Result<()> {
     let config = load_or_default_config(config_path);
     let profile_dir = config.profile_dir()?;
 
@@ -92,22 +38,22 @@ pub fn install_from_local_xpi(xpi_path: &Path, config_path: &Path) -> Result<()>
     // Install to profile
     install_to_profile(&result.xpi_data, &profile_dir, &result.id)?;
 
-    let xpi_path = profile_dir
+    let installed_path = profile_dir
         .join("extensions")
         .join(format!("{}.xpi", result.id));
 
     // Verify file exists after install
-    if xpi_path.exists() {
-        let meta = std::fs::metadata(&xpi_path)?;
+    if installed_path.exists() {
+        let meta = std::fs::metadata(&installed_path)?;
         println!(
             "Verified: {} exists ({} bytes)",
-            xpi_path.display(),
+            installed_path.display(),
             meta.len()
         );
     } else {
         println!(
             "WARNING: File does not exist after install: {}",
-            xpi_path.display()
+            installed_path.display()
         );
     }
 

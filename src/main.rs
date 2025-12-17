@@ -69,18 +69,10 @@ enum ExtensionCommands {
         missing: bool,
     },
 
-    /// Install an extension from git or a local package
+    /// Install an extension from a signed XPI file
     Install {
-        /// Git URL or path to local XPI/ZIP file
-        source: String,
-
-        /// Git ref (branch, tag, commit) to build from
-        #[arg(short, long)]
-        r#ref: Option<String>,
-
-        /// Custom build command
-        #[arg(short, long)]
-        build: Option<String>,
+        /// Path to XPI file
+        path: std::path::PathBuf,
     },
 
     /// Uninstall an extension
@@ -140,28 +132,8 @@ async fn main() -> Result<()> {
             ExtensionCommands::List { missing } => {
                 cli::list_extensions(&config_path, missing)?;
             }
-            ExtensionCommands::Install {
-                source,
-                r#ref,
-                build,
-            } => {
-                let path = std::path::Path::new(&source);
-                let is_package = path.exists()
-                    && path
-                        .extension()
-                        .map(|e| e == "xpi" || e == "zip")
-                        .unwrap_or(false);
-
-                if is_package {
-                    cli::install_from_local_xpi(path, &config_path)?;
-                } else {
-                    cli::install_from_git_url(
-                        &source,
-                        r#ref.as_deref(),
-                        build.as_deref(),
-                        &config_path,
-                    )?;
-                }
+            ExtensionCommands::Install { path } => {
+                cli::install_extension(&path, &config_path)?;
             }
             ExtensionCommands::Uninstall { id } => {
                 cli::uninstall_extension(&id, &config_path)?;

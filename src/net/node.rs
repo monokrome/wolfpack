@@ -394,7 +394,7 @@ async fn handle_sync_event(
     event_tx: &mpsc::Sender<NetworkEvent>,
 ) {
     match event {
-        request_response::Event::Message { peer, message } => {
+        request_response::Event::Message { peer, message, .. } => {
             handle_sync_message(swarm, peer, message, event_tx).await;
         }
         request_response::Event::OutboundFailure { peer, error, .. } => {

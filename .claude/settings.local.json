@@ -20,7 +20,9 @@
       "WebFetch(domain:lib.rs)",
       "Bash(git remote set-url:*)",
       "Bash(cargo tree:*)",
-      "Bash(s6-svstat:*)"
+      "Bash(s6-svstat:*)",
+      "Bash(cargo update:*)",
+      "Bash(cargo search:*)"
     ]
   }
 }

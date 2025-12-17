@@ -48,7 +48,7 @@ sha2 = "0.10"
 cpufeatures = "0.2"
 
 # P2P networking
-libp2p = { version = "0.54", features = [
+libp2p = { version = "0.56", features = [
     "tokio",
     "noise",
     "tcp",
