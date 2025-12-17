@@ -27,7 +27,9 @@ pub struct PathConfig {
 pub struct SyncConfig {
     /// Port for P2P connections (0 for random)
     pub listen_port: Option<u16>,
-    /// Enable DHT for internet-wide discovery (default: false, local-only via mDNS)
+    /// Enable mDNS for local network discovery (default: false)
+    pub enable_mdns: bool,
+    /// Enable DHT for internet-wide discovery (default: false)
     pub enable_dht: bool,
     /// Bootstrap peers for DHT (multiaddr format)
     pub bootstrap_peers: Vec<String>,
@@ -152,6 +154,10 @@ impl FromValue for SyncConfig {
                 .get("listen_port")
                 .and_then(|v| v.as_u64())
                 .map(|n| n as u16),
+            enable_mdns: obj
+                .get("enable_mdns")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             enable_dht: obj
                 .get("enable_dht")
                 .and_then(|v| v.as_bool())
@@ -273,6 +279,7 @@ impl Config {
         if let Some(port) = self.sync.listen_port {
             content.push_str(&format!("listen_port = {}\n", port));
         }
+        content.push_str(&format!("enable_mdns = {}\n", self.sync.enable_mdns));
         content.push_str(&format!("enable_dht = {}\n", self.sync.enable_dht));
         if !self.sync.bootstrap_peers.is_empty() {
             content.push_str(&format!(

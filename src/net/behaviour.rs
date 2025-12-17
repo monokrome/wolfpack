@@ -1,4 +1,7 @@
-use libp2p::{dcutr, identify, kad, mdns, ping, relay, request_response, swarm::NetworkBehaviour};
+use libp2p::{
+    dcutr, identify, kad, mdns, ping, relay, request_response,
+    swarm::{NetworkBehaviour, behaviour::toggle::Toggle},
+};
 use std::time::Duration;
 
 use super::protocol::{PROTOCOL_NAME, SyncCodec};
@@ -6,8 +9,8 @@ use super::protocol::{PROTOCOL_NAME, SyncCodec};
 /// Combined network behaviour for wolfpack
 #[derive(NetworkBehaviour)]
 pub struct WolfpackBehaviour {
-    /// mDNS for local network discovery
-    pub mdns: mdns::tokio::Behaviour,
+    /// mDNS for local network discovery (optional)
+    pub mdns: Toggle<mdns::tokio::Behaviour>,
 
     /// Kademlia DHT for internet-wide discovery
     pub kademlia: kad::Behaviour<kad::store::MemoryStore>,
@@ -32,13 +35,19 @@ impl WolfpackBehaviour {
     pub fn new(
         local_key: &libp2p::identity::Keypair,
         relay_client: relay::client::Behaviour,
+        enable_mdns: bool,
     ) -> Self {
         let local_peer_id = local_key.public().to_peer_id();
 
-        // mDNS for local discovery
-        #[allow(clippy::expect_used)] // mDNS is critical - fail fast if unavailable
-        let mdns = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)
-            .expect("Failed to create mDNS behaviour");
+        // mDNS for local discovery (optional)
+        let mdns = if enable_mdns {
+            #[allow(clippy::expect_used)] // mDNS requested - fail fast if unavailable
+            let behaviour = mdns::tokio::Behaviour::new(mdns::Config::default(), local_peer_id)
+                .expect("Failed to create mDNS behaviour");
+            Toggle::from(Some(behaviour))
+        } else {
+            Toggle::from(None)
+        };
 
         // Kademlia DHT
         let store = kad::store::MemoryStore::new(local_peer_id);

@@ -17,7 +17,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "WebFetch(domain:docs.rs)",
-      "WebFetch(domain:lib.rs)"
+      "WebFetch(domain:lib.rs)",
+      "Bash(git remote set-url:*)",
+      "Bash(cargo tree:*)",
+      "Bash(s6-svstat:*)"
     ]
   }
 }

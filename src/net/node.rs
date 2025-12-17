@@ -117,6 +117,7 @@ impl Node {
     pub async fn new(
         device_name: String,
         listen_port: Option<u16>,
+        enable_mdns: bool,
         enable_dht: bool,
     ) -> Result<Self> {
         // Generate or load identity
@@ -135,7 +136,7 @@ impl Node {
             )?
             .with_quic()
             .with_relay_client(noise::Config::new, yamux::Config::default)?
-            .with_behaviour(WolfpackBehaviour::new)?
+            .with_behaviour(|key, relay| WolfpackBehaviour::new(key, relay, enable_mdns))?
             .with_swarm_config(|c| c.with_idle_connection_timeout(Duration::from_secs(60)))
             .build();
 

@@ -150,6 +150,7 @@ async fn init_p2p_node(config: &Config) -> Result<Node> {
     let mut node = Node::new(
         config.device.name.clone(),
         config.sync.listen_port,
+        config.sync.enable_mdns,
         config.sync.enable_dht,
     )
     .await?;
