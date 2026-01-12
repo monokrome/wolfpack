@@ -80,7 +80,7 @@ fn librewolf_base_path() -> Result<PathBuf> {
 
     #[cfg(target_os = "macos")]
     let candidates = vec![
-        home.join("Library/Application Support/librewolf/Profiles"),
+        home.join("Library/Application Support/librewolf"),
         home.join("Library/Application Support/LibreWolf"),
         home.join("Library/Application Support/Firefox"),
     ];
