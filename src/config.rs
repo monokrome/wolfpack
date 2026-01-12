@@ -508,6 +508,51 @@ mod tests {
     }
 
     #[test]
+    fn test_config_path_uses_xdg_config_home() {
+        let config_path = Config::default_path();
+        // Config should be in XDG_CONFIG_HOME (or ~/.config on Unix)
+        // not in XDG_DATA_HOME (or ~/.local/share on Unix)
+        #[cfg(target_os = "linux")]
+        {
+            let path_str = config_path.to_string_lossy();
+            assert!(
+                path_str.contains(".config") || path_str.contains("config"),
+                "Config path should use XDG_CONFIG_HOME, got: {}",
+                path_str
+            );
+            assert!(
+                !path_str.contains(".local/share"),
+                "Config path should not be in .local/share, got: {}",
+                path_str
+            );
+        }
+    }
+
+    #[test]
+    fn test_data_paths_use_xdg_data_home() {
+        // Sync dir and state db should be in XDG_DATA_HOME
+        let sync_dir = Config::default_sync_dir();
+        let state_db = Config::default_state_db();
+
+        #[cfg(target_os = "linux")]
+        {
+            let sync_str = sync_dir.to_string_lossy();
+            let state_str = state_db.to_string_lossy();
+
+            assert!(
+                sync_str.contains(".local/share") || sync_str.contains("share"),
+                "Sync dir should use XDG_DATA_HOME, got: {}",
+                sync_str
+            );
+            assert!(
+                state_str.contains(".local/share") || state_str.contains("share"),
+                "State DB should use XDG_DATA_HOME, got: {}",
+                state_str
+            );
+        }
+    }
+
+    #[test]
     fn test_state_db_path() {
         let mut config = Config::default();
         config.paths.sync_dir = PathBuf::from("/custom/sync");

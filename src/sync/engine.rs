@@ -518,3 +518,73 @@ pub struct SyncResult {
     pub profile_files_written: Vec<String>,
     pub event_file: Option<PathBuf>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::events::PrefValue;
+
+    #[test]
+    fn test_parse_pref_value_bool_true() {
+        let result = parse_pref_value("true", "bool").unwrap();
+        assert!(matches!(result, PrefValue::Bool(true)));
+    }
+
+    #[test]
+    fn test_parse_pref_value_bool_false() {
+        let result = parse_pref_value("false", "bool").unwrap();
+        assert!(matches!(result, PrefValue::Bool(false)));
+    }
+
+    #[test]
+    fn test_parse_pref_value_bool_invalid() {
+        let result = parse_pref_value("not_a_bool", "bool");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Failed to parse bool value"));
+    }
+
+    #[test]
+    fn test_parse_pref_value_int_positive() {
+        let result = parse_pref_value("42", "int").unwrap();
+        assert!(matches!(result, PrefValue::Int(42)));
+    }
+
+    #[test]
+    fn test_parse_pref_value_int_negative() {
+        let result = parse_pref_value("-123", "int").unwrap();
+        assert!(matches!(result, PrefValue::Int(-123)));
+    }
+
+    #[test]
+    fn test_parse_pref_value_int_zero() {
+        let result = parse_pref_value("0", "int").unwrap();
+        assert!(matches!(result, PrefValue::Int(0)));
+    }
+
+    #[test]
+    fn test_parse_pref_value_int_invalid() {
+        let result = parse_pref_value("not_a_number", "int");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("Failed to parse int value"));
+    }
+
+    #[test]
+    fn test_parse_pref_value_string() {
+        let result = parse_pref_value("hello world", "string").unwrap();
+        assert!(matches!(result, PrefValue::String(s) if s == "hello world"));
+    }
+
+    #[test]
+    fn test_parse_pref_value_unknown_type_as_string() {
+        let result = parse_pref_value("some value", "unknown_type").unwrap();
+        assert!(matches!(result, PrefValue::String(s) if s == "some value"));
+    }
+
+    #[test]
+    fn test_parse_pref_value_empty_string() {
+        let result = parse_pref_value("", "string").unwrap();
+        assert!(matches!(result, PrefValue::String(s) if s.is_empty()));
+    }
+}
