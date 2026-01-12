@@ -22,7 +22,13 @@
       "Bash(cargo tree:*)",
       "Bash(s6-svstat:*)",
       "Bash(cargo update:*)",
-      "Bash(cargo search:*)"
+      "Bash(cargo search:*)",
+      "Bash(tokei:*)",
+      "Bash(wc:*)",
+      "Bash(git revert:*)",
+      "WebSearch",
+      "WebFetch(domain:firefox-source-docs.mozilla.org)",
+      "WebFetch(domain:htpinnovations.com)"
     ]
   }
 }

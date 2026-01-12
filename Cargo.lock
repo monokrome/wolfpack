@@ -2830,7 +2830,7 @@ dependencies = [
  "jzon",
  "notify",
  "roxmltree",
- "rust-ini",
+ "rust-ini 0.20.0",
  "thiserror 1.0.69",
  "tokio",
  "toml_edit",
@@ -3191,6 +3191,16 @@ name = "rust-ini"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e0698206bcb8882bf2a9ecb4c1e7785db57ff052297085a6efd4fe42302068a"
+dependencies = [
+ "cfg-if",
+ "ordered-multimap",
+]
+
+[[package]]
+name = "rust-ini"
+version = "0.21.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "796e8d2b6696392a43bea58116b667fb4c29727dc5abd27d6acf338bb4f688c7"
 dependencies = [
  "cfg-if",
  "ordered-multimap",
@@ -4562,6 +4572,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "rusqlite",
+ "rust-ini 0.21.3",
  "serde",
  "serde_json",
  "sha2",

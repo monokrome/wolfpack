@@ -21,7 +21,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Run the sync daemon
-    Daemon,
+    Daemon {
+        /// LibreWolf profile directory (auto-detected if not specified)
+        #[arg(short, long)]
+        profile: Option<std::path::PathBuf>,
+    },
 
     /// Initialize wolfpack
     Init {
@@ -95,8 +99,11 @@ async fn main() -> Result<()> {
     let config_path = cli.config.unwrap_or_else(Config::default_path);
 
     match cli.command {
-        Commands::Daemon => {
-            let config = Config::load(&config_path)?;
+        Commands::Daemon { profile } => {
+            let mut config = Config::load(&config_path)?;
+            if let Some(profile_path) = profile {
+                config.paths.profile = Some(profile_path);
+            }
             run_daemon(config).await?;
         }
 

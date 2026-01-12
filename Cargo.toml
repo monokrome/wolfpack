@@ -17,6 +17,7 @@ toml = "0.8"
 
 # Configuration
 prefer = "0.3"
+rust-ini = "0.21"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
