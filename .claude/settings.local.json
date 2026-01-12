@@ -28,7 +28,8 @@
       "Bash(git revert:*)",
       "WebSearch",
       "WebFetch(domain:firefox-source-docs.mozilla.org)",
-      "WebFetch(domain:htpinnovations.com)"
+      "WebFetch(domain:htpinnovations.com)",
+      "Bash(kill:*)"
     ]
   }
 }

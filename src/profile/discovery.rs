@@ -29,8 +29,13 @@ fn parse_profiles_ini(content: &str, base: &Path) -> Result<PathBuf> {
                         // Relative path like "Profiles/xxx.default-default"
                         base.join(default_path)
                     } else {
-                        // Just profile name
-                        base.join("Profiles").join(default_path)
+                        // Just profile name - try base dir first, then Profiles subdir
+                        let direct = base.join(default_path);
+                        if direct.exists() {
+                            direct
+                        } else {
+                            base.join("Profiles").join(default_path)
+                        }
                     };
 
                     if profile_path.join("prefs.js").exists() {
