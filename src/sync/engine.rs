@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tracing::{debug, info, warn};
@@ -14,6 +14,23 @@ use crate::profile::{
 use crate::state::{PendingTab, StateDb, materialize_events};
 
 use super::diff::{diff_containers, diff_extensions, diff_handlers, diff_prefs};
+
+/// Parse a preference value from database string representation
+fn parse_pref_value(value: &str, value_type: &str) -> Result<crate::events::PrefValue> {
+    use crate::events::PrefValue;
+
+    match value_type {
+        "bool" => value
+            .parse::<bool>()
+            .map(PrefValue::Bool)
+            .with_context(|| format!("Failed to parse bool value: {}", value)),
+        "int" => value
+            .parse::<i64>()
+            .map(PrefValue::Int)
+            .with_context(|| format!("Failed to parse int value: {}", value)),
+        _ => Ok(PrefValue::String(value.to_string())),
+    }
+}
 
 pub struct SyncEngine {
     config: Config,
@@ -224,7 +241,6 @@ impl SyncEngine {
     fn get_materialized_prefs(
         &self,
     ) -> Result<std::collections::HashMap<String, crate::events::PrefValue>> {
-        use crate::events::PrefValue;
         let conn = self.state_db.connection();
         let mut stmt = conn.prepare("SELECT key, value, value_type FROM prefs")?;
         let mut prefs = std::collections::HashMap::new();
@@ -236,12 +252,7 @@ impl SyncEngine {
         })?;
         for row in rows {
             let (key, value, value_type) = row?;
-            let pref_value = match value_type.as_str() {
-                "bool" => PrefValue::Bool(value.parse().unwrap_or(false)),
-                "int" => PrefValue::Int(value.parse().unwrap_or(0)),
-                _ => PrefValue::String(value),
-            };
-            prefs.insert(key, pref_value);
+            prefs.insert(key, parse_pref_value(&value, &value_type)?);
         }
         Ok(prefs)
     }
@@ -290,12 +301,7 @@ impl SyncEngine {
         })?;
         for row in rows {
             let (key, value, value_type) = row?;
-            let pref_value = match value_type.as_str() {
-                "bool" => PrefValue::Bool(value.parse().unwrap_or(false)),
-                "int" => PrefValue::Int(value.parse().unwrap_or(0)),
-                _ => PrefValue::String(value),
-            };
-            known.insert(key, pref_value);
+            known.insert(key, parse_pref_value(&value, &value_type)?);
         }
         Ok(known)
     }
