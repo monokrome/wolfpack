@@ -51,6 +51,25 @@ pub enum NetworkEvent {
         from: PeerId,
         request_id: request_response::InboundRequestId,
     },
+
+    /// A peer wants to join our pairing session
+    PairingRequested {
+        from: PeerId,
+        request_id: request_response::InboundRequestId,
+        code: String,
+        device_id: String,
+        device_name: String,
+        public_key: String,
+    },
+
+    /// Response to our pairing join request
+    PairingResponse {
+        from: PeerId,
+        status: String,
+        device_id: Option<String>,
+        device_name: Option<String>,
+        public_key: Option<String>,
+    },
 }
 
 /// Commands sent to the network from the application
@@ -98,6 +117,24 @@ pub enum NetworkCommand {
 
     /// Add a bootstrap peer for DHT
     AddBootstrapPeer { peer_id: PeerId, addr: Multiaddr },
+
+    /// Request to join a pairing session
+    JoinPairing {
+        peer_id: PeerId,
+        code: String,
+        device_id: String,
+        device_name: String,
+        public_key: String,
+    },
+
+    /// Respond to a pairing request
+    RespondPairing {
+        request_id: request_response::InboundRequestId,
+        status: String,
+        device_id: Option<String>,
+        device_name: Option<String>,
+        public_key: Option<String>,
+    },
 }
 
 /// The P2P node
@@ -459,6 +496,26 @@ async fn handle_sync_request(
             };
             handle_send_tab(swarm, peer, tab, channel, event_tx).await;
         }
+        SyncRequest::JoinPairing {
+            code,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            if let Err(e) = event_tx
+                .send(NetworkEvent::PairingRequested {
+                    from: peer,
+                    request_id,
+                    code,
+                    device_id,
+                    device_name,
+                    public_key,
+                })
+                .await
+            {
+                error!("Failed to send pairing request event: {}", e);
+            }
+        }
     }
 }
 
@@ -541,10 +598,31 @@ async fn handle_sync_response(
     event_tx: &mpsc::Sender<NetworkEvent>,
 ) {
     debug!("Received response from {}: {:?}", peer, response);
-    if let SyncResponse::Events { events } = response {
-        let _ = event_tx
-            .send(NetworkEvent::EventsReceived { from: peer, events })
-            .await;
+    match response {
+        SyncResponse::Events { events } => {
+            let _ = event_tx
+                .send(NetworkEvent::EventsReceived { from: peer, events })
+                .await;
+        }
+        SyncResponse::PairingResult {
+            status,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            let _ = event_tx
+                .send(NetworkEvent::PairingResponse {
+                    from: peer,
+                    status,
+                    device_id,
+                    device_name,
+                    public_key,
+                })
+                .await;
+        }
+        _ => {
+            // Ignore other response types
+        }
     }
 }
 
@@ -622,6 +700,41 @@ async fn handle_command(swarm: &mut Swarm<WolfpackBehaviour>, cmd: NetworkComman
             if let Err(e) = swarm.behaviour_mut().kademlia.bootstrap() {
                 warn!("Kademlia bootstrap failed: {}", e);
             }
+        }
+
+        NetworkCommand::JoinPairing {
+            peer_id,
+            code,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            swarm.behaviour_mut().sync.send_request(
+                &peer_id,
+                SyncRequest::JoinPairing {
+                    code,
+                    device_id,
+                    device_name,
+                    public_key,
+                },
+            );
+        }
+
+        NetworkCommand::RespondPairing {
+            request_id,
+            status,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            // Note: We'd need to store the response channel to respond later
+            // This is a simplification - in practice you'd need to track pending requests
+            debug!(
+                "Would respond to pairing request {:?} with status={}",
+                request_id, status
+            );
+            // TODO: Store response channels and implement async response
+            let _ = (device_id, device_name, public_key); // Suppress warnings
         }
     }
 }

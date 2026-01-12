@@ -33,6 +33,18 @@ pub enum SyncRequest {
         /// Sender device name
         from_device: String,
     },
+
+    /// Request to join a pairing session
+    JoinPairing {
+        /// 6-digit pairing code
+        code: String,
+        /// Joiner's device ID
+        device_id: String,
+        /// Joiner's device name
+        device_name: String,
+        /// Joiner's public key (hex)
+        public_key: String,
+    },
 }
 
 /// Response types for the sync protocol
@@ -53,6 +65,18 @@ pub enum SyncResponse {
 
     /// Acknowledge received tab
     TabReceived,
+
+    /// Response to pairing request
+    PairingResult {
+        /// Status: "accepted", "rejected", "expired", or "invalid_code"
+        status: String,
+        /// Initiator's device ID (if accepted)
+        device_id: Option<String>,
+        /// Initiator's device name (if accepted)
+        device_name: Option<String>,
+        /// Initiator's public key (if accepted)
+        public_key: Option<String>,
+    },
 
     /// Error response
     Error { message: String },

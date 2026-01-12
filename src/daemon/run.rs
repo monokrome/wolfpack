@@ -350,6 +350,37 @@ async fn handle_network_event(event: NetworkEvent, ctx: &DaemonContext) {
             title,
             from_device,
         } => handle_tab_received(ctx, from, url, title, from_device).await,
+
+        NetworkEvent::PairingRequested {
+            from,
+            request_id,
+            code,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            handle_pairing_requested(ctx, from, request_id, code, device_id, device_name, public_key).await;
+        }
+
+        NetworkEvent::PairingResponse {
+            from,
+            status,
+            device_id,
+            device_name,
+            public_key,
+        } => {
+            info!("Pairing response from {}: status={}", from, status);
+            // TODO: Forward this to the HTTP API or pairing manager
+            // For now, just log it
+            if status == "accepted" {
+                if let (Some(id), Some(name)) = (device_id, device_name) {
+                    info!("Paired with device: {} ({})", name, id);
+                    if let Some(key) = public_key {
+                        debug!("Public key: {}", key);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -434,4 +465,28 @@ async fn handle_tab_received(
     if let Err(e) = engine.receive_tab(&url, title.as_deref(), &from_device) {
         warn!("Failed to save received tab: {}", e);
     }
+}
+
+#[allow(clippy::cognitive_complexity)] // Pairing handler with state management
+#[allow(clippy::too_many_arguments)] // All parameters needed for pairing
+async fn handle_pairing_requested(
+    ctx: &DaemonContext,
+    from: libp2p::PeerId,
+    request_id: libp2p::request_response::InboundRequestId,
+    code: String,
+    _device_id: String,
+    _device_name: String,
+    _public_key: String,
+) {
+    info!("Pairing request from {} with code {}", from, code);
+
+    // TODO: Check if we have an active pairing session with this code
+    // For now, respond with invalid_code
+    let _ = ctx.node.send_command(crate::net::NetworkCommand::RespondPairing {
+        request_id,
+        status: "invalid_code".to_string(),
+        device_id: None,
+        device_name: None,
+        public_key: None,
+    }).await;
 }
