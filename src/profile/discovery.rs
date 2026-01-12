@@ -19,9 +19,9 @@ pub fn find_profile() -> Result<PathBuf> {
             continue;
         }
 
-        if name_str.ends_with(".default-release") {
+        if name_str.contains(".default-release") {
             default_release = Some(path);
-        } else if name_str.ends_with(".default") && default.is_none() {
+        } else if name_str.contains(".default") && default.is_none() {
             default = Some(path);
         }
     }
