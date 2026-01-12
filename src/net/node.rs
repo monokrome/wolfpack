@@ -273,6 +273,14 @@ impl Node {
 /// Run the swarm event loop
 #[allow(clippy::cognitive_complexity)] // Core P2P event loop
 #[allow(clippy::too_many_arguments)] // Required for swarm coordination
+use std::time::Instant;
+
+/// Storage for pending response channels
+struct PendingResponse {
+    channel: request_response::ResponseChannel<SyncResponse>,
+    created_at: Instant,
+}
+
 async fn run_swarm(
     mut swarm: Swarm<WolfpackBehaviour>,
     mut command_rx: mpsc::Receiver<NetworkCommand>,
@@ -282,6 +290,12 @@ async fn run_swarm(
     enable_dht: bool,
 ) {
     let mut discovered_peers: HashSet<PeerId> = HashSet::new();
+    let mut pending_responses: HashMap<request_response::InboundRequestId, PendingResponse> =
+        HashMap::new();
+
+    // Cleanup timer for expired response channels (30 second timeout)
+    let mut cleanup_interval = tokio::time::interval(Duration::from_secs(10));
+    const RESPONSE_TIMEOUT: Duration = Duration::from_secs(30);
 
     loop {
         tokio::select! {
@@ -317,7 +331,7 @@ async fn run_swarm(
                     }
 
                     SwarmEvent::Behaviour(WolfpackBehaviourEvent::Sync(event)) => {
-                        handle_sync_event(&mut swarm, event, &event_tx).await;
+                        handle_sync_event(&mut swarm, event, &event_tx, &mut pending_responses).await;
                     }
 
                     SwarmEvent::Behaviour(WolfpackBehaviourEvent::Ping(event)) => {
@@ -338,7 +352,21 @@ async fn run_swarm(
 
             // Handle commands from application
             Some(cmd) = command_rx.recv() => {
-                handle_command(&mut swarm, cmd).await;
+                handle_command(&mut swarm, cmd, &mut pending_responses).await;
+            }
+
+            // Periodic cleanup of expired response channels
+            _ = cleanup_interval.tick() => {
+                let now = Instant::now();
+                pending_responses.retain(|request_id, pending| {
+                    let elapsed = now.duration_since(pending.created_at);
+                    if elapsed > RESPONSE_TIMEOUT {
+                        warn!("Response channel for request {:?} expired after {:?}", request_id, elapsed);
+                        false
+                    } else {
+                        true
+                    }
+                });
             }
         }
     }
@@ -429,10 +457,11 @@ async fn handle_sync_event(
     swarm: &mut Swarm<WolfpackBehaviour>,
     event: request_response::Event<SyncRequest, SyncResponse>,
     event_tx: &mpsc::Sender<NetworkEvent>,
+    pending_responses: &mut HashMap<request_response::InboundRequestId, PendingResponse>,
 ) {
     match event {
         request_response::Event::Message { peer, message, .. } => {
-            handle_sync_message(swarm, peer, message, event_tx).await;
+            handle_sync_message(swarm, peer, message, event_tx, pending_responses).await;
         }
         request_response::Event::OutboundFailure { peer, error, .. } => {
             warn!("Outbound request to {} failed: {:?}", peer, error);
@@ -449,6 +478,7 @@ async fn handle_sync_message(
     peer: PeerId,
     message: request_response::Message<SyncRequest, SyncResponse>,
     event_tx: &mpsc::Sender<NetworkEvent>,
+    pending_responses: &mut HashMap<request_response::InboundRequestId, PendingResponse>,
 ) {
     match message {
         request_response::Message::Request {
@@ -457,7 +487,7 @@ async fn handle_sync_message(
             channel,
         } => {
             debug!("Received request from {}: {:?}", peer, request);
-            handle_sync_request(swarm, peer, request_id, request, channel, event_tx).await;
+            handle_sync_request(swarm, peer, request_id, request, channel, event_tx, pending_responses).await;
         }
         request_response::Message::Response { response, .. } => {
             handle_sync_response(peer, response, event_tx).await;
@@ -473,15 +503,33 @@ async fn handle_sync_request(
     request: SyncRequest,
     channel: request_response::ResponseChannel<SyncResponse>,
     event_tx: &mpsc::Sender<NetworkEvent>,
+    pending_responses: &mut HashMap<request_response::InboundRequestId, PendingResponse>,
 ) {
     match request {
         SyncRequest::GetClock => {
+            // Store channel for async response
+            pending_responses.insert(
+                request_id,
+                PendingResponse {
+                    channel,
+                    created_at: Instant::now(),
+                },
+            );
             handle_get_clock(peer, request_id, event_tx).await;
         }
         SyncRequest::GetEvents { clock } => {
+            // Store channel for async response
+            pending_responses.insert(
+                request_id,
+                PendingResponse {
+                    channel,
+                    created_at: Instant::now(),
+                },
+            );
             handle_get_events(peer, request_id, clock, event_tx).await;
         }
         SyncRequest::PushEvents { events } => {
+            // Immediate response - don't store channel
             handle_push_events(swarm, peer, events, channel, event_tx).await;
         }
         SyncRequest::SendTab {
@@ -489,6 +537,7 @@ async fn handle_sync_request(
             title,
             from_device,
         } => {
+            // Immediate response - don't store channel
             let tab = TabData {
                 url,
                 title,
@@ -502,6 +551,14 @@ async fn handle_sync_request(
             device_name,
             public_key,
         } => {
+            // Store channel for async response
+            pending_responses.insert(
+                request_id,
+                PendingResponse {
+                    channel,
+                    created_at: Instant::now(),
+                },
+            );
             if let Err(e) = event_tx
                 .send(NetworkEvent::PairingRequested {
                     from: peer,
@@ -628,7 +685,11 @@ async fn handle_sync_response(
 
 #[allow(clippy::cognitive_complexity)] // Command handler with many variants
 #[allow(clippy::too_many_lines)] // Complete command handling
-async fn handle_command(swarm: &mut Swarm<WolfpackBehaviour>, cmd: NetworkCommand) {
+async fn handle_command(
+    swarm: &mut Swarm<WolfpackBehaviour>,
+    cmd: NetworkCommand,
+    pending_responses: &mut HashMap<request_response::InboundRequestId, PendingResponse>,
+) {
     match cmd {
         NetworkCommand::GetClock { peer_id } => {
             swarm
@@ -670,23 +731,32 @@ async fn handle_command(swarm: &mut Swarm<WolfpackBehaviour>, cmd: NetworkComman
         NetworkCommand::RespondClock {
             request_id,
             clock,
-            device_id: _,
-            device_name: _,
+            device_id,
+            device_name,
         } => {
-            // Note: We'd need to store the response channel to respond later
-            // This is a simplification - in practice you'd need to track pending requests
-            debug!(
-                "Would respond to clock request {:?} with {:?}",
-                request_id, clock
-            );
+            if let Some(pending) = pending_responses.remove(&request_id) {
+                let response = SyncResponse::Clock {
+                    clock,
+                    device_id,
+                    device_name,
+                };
+                if let Err(e) = swarm.behaviour_mut().sync.send_response(pending.channel, response) {
+                    warn!("Failed to send clock response: {:?}", e);
+                }
+            } else {
+                warn!("No pending response found for request {:?}", request_id);
+            }
         }
 
         NetworkCommand::RespondEvents { request_id, events } => {
-            debug!(
-                "Would respond to events request {:?} with {} events",
-                request_id,
-                events.len()
-            );
+            if let Some(pending) = pending_responses.remove(&request_id) {
+                let response = SyncResponse::Events { events };
+                if let Err(e) = swarm.behaviour_mut().sync.send_response(pending.channel, response) {
+                    warn!("Failed to send events response: {:?}", e);
+                }
+            } else {
+                warn!("No pending response found for request {:?}", request_id);
+            }
         }
 
         NetworkCommand::Dial { addr } => {
@@ -727,14 +797,19 @@ async fn handle_command(swarm: &mut Swarm<WolfpackBehaviour>, cmd: NetworkComman
             device_name,
             public_key,
         } => {
-            // Note: We'd need to store the response channel to respond later
-            // This is a simplification - in practice you'd need to track pending requests
-            debug!(
-                "Would respond to pairing request {:?} with status={}",
-                request_id, status
-            );
-            // TODO: Store response channels and implement async response
-            let _ = (device_id, device_name, public_key); // Suppress warnings
+            if let Some(pending) = pending_responses.remove(&request_id) {
+                let response = SyncResponse::PairingResult {
+                    status,
+                    device_id,
+                    device_name,
+                    public_key,
+                };
+                if let Err(e) = swarm.behaviour_mut().sync.send_response(pending.channel, response) {
+                    warn!("Failed to send pairing response: {:?}", e);
+                }
+            } else {
+                warn!("No pending response found for request {:?}", request_id);
+            }
         }
     }
 }
