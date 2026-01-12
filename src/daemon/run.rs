@@ -29,8 +29,8 @@ struct DaemonContext {
     engine: Arc<Mutex<SyncEngine>>,
     node: Node,
     config: Config,
-    profile_path: Option<PathBuf>,
-    _watcher: Option<FileWatcher>, // Keep watcher alive
+    profile_path: PathBuf,
+    _watcher: FileWatcher, // Keep watcher alive
 }
 
 #[allow(clippy::cognitive_complexity)] // Entry point with multiple initialization checks
@@ -71,27 +71,13 @@ async fn initialize_daemon(
     let engine = Arc::new(Mutex::new(sync_engine));
 
     let node = init_p2p_node(config).await?;
-
-    // Profile path and watcher are optional - daemon can run without LibreWolf for pairing/testing
-    let (profile_path, watcher, watcher_events) = match resolve_profile_path(config) {
-        Ok(path) => {
-            info!("Watching LibreWolf profile: {}", path.display());
-            let watcher = FileWatcher::new(&[path.as_path()])?;
-            let events = watcher.events.resubscribe();
-
-            // Initial profile scan
-            scan_profile(&engine, "Initial scan").await;
-
-            (Some(path), Some(watcher), events)
-        }
-        Err(e) => {
-            warn!("LibreWolf profile not found: {}. Daemon will run without profile sync.", e);
-            let (_tx, rx) = tokio::sync::broadcast::channel(1);
-            (None, None, rx)
-        }
-    };
-
+    let profile_path = resolve_profile_path(config)?;
+    let watcher = FileWatcher::new(&[profile_path.as_path()])?;
+    let watcher_events = watcher.events.resubscribe();
     let ipc = init_ipc_socket().await?;
+
+    // Initial profile scan
+    scan_profile(&engine, "Initial scan").await;
 
     info!("Daemon initialized, waiting for events...");
 
@@ -223,10 +209,7 @@ async fn run_event_loop(
     mut watcher_events: broadcast::Receiver<notify::Event>,
     mut pairing_rx: tokio::sync::mpsc::Receiver<PairingCommand>,
 ) -> Result<()> {
-    let mut browser_was_running = ctx
-        .profile_path
-        .as_ref()
-        .map_or(false, |p| is_browser_running(p));
+    let mut browser_was_running = is_browser_running(&ctx.profile_path);
     let mut sync_interval = tokio::time::interval(Duration::from_secs(30));
     let mut pairing_state = PairingState::new();
 
@@ -314,11 +297,7 @@ async fn handle_periodic_sync(ctx: &DaemonContext) {
 
 #[allow(clippy::cognitive_complexity)] // State check with conditional flushing
 async fn handle_browser_state_check(ctx: &DaemonContext, was_running: bool) -> bool {
-    let browser_running = ctx
-        .profile_path
-        .as_ref()
-        .map_or(false, |p| is_browser_running(p));
-
+    let browser_running = is_browser_running(&ctx.profile_path);
     if was_running && !browser_running {
         info!("Browser closed, flushing write queue");
         let mut engine = ctx.engine.lock().await;
