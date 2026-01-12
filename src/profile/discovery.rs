@@ -21,32 +21,20 @@ fn parse_profiles_ini(content: &str, base: &Path) -> Result<PathBuf> {
         .context("Failed to parse profiles.ini")?;
 
     // First try to find default profile from [InstallXXX] section
+    // The Default field contains the profile name, which we need to match against Path fields
+    let mut install_default: Option<String> = None;
     for (section, props) in ini.iter() {
         if let Some(section_name) = section {
             if section_name.starts_with("Install") {
-                if let Some(default_path) = props.get("Default") {
-                    let profile_path = if default_path.contains('/') || default_path.contains('\\') {
-                        // Relative path like "Profiles/xxx.default-default"
-                        base.join(default_path)
-                    } else {
-                        // Just profile name - try base dir first, then Profiles subdir
-                        let direct = base.join(default_path);
-                        if direct.exists() {
-                            direct
-                        } else {
-                            base.join("Profiles").join(default_path)
-                        }
-                    };
-
-                    if profile_path.join("prefs.js").exists() {
-                        return Ok(profile_path);
-                    }
+                if let Some(default_name) = props.get("Default") {
+                    install_default = Some(default_name.to_string());
+                    break;
                 }
             }
         }
     }
 
-    // Fallback: look for Default=1 in [ProfileN] sections
+    // Collect all profiles with their paths
     let mut profiles = HashMap::new();
     for (section, props) in ini.iter() {
         if let Some(section_name) = section {
@@ -54,6 +42,7 @@ fn parse_profiles_ini(content: &str, base: &Path) -> Result<PathBuf> {
                 if let Some(path_str) = props.get("Path") {
                     let is_default = props.get("Default").map_or(false, |v| v == "1");
                     let is_relative = props.get("IsRelative").map_or(false, |v| v == "1");
+                    let name = props.get("Name").map(|s| s.to_string());
 
                     let profile_path = if is_relative {
                         base.join(path_str)
@@ -61,14 +50,26 @@ fn parse_profiles_ini(content: &str, base: &Path) -> Result<PathBuf> {
                         PathBuf::from(path_str)
                     };
 
-                    profiles.insert(section_name, (profile_path, is_default));
+                    profiles.insert(
+                        path_str.to_string(),
+                        (profile_path, is_default, name),
+                    );
                 }
             }
         }
     }
 
-    // Return the profile marked Default=1
-    for (_name, (path, is_default)) in profiles {
+    // First try to match [InstallXXX] Default= field
+    if let Some(default_name) = install_default {
+        if let Some((path, _, _)) = profiles.get(&default_name) {
+            if path.join("prefs.js").exists() {
+                return Ok(path.clone());
+            }
+        }
+    }
+
+    // Fallback: use profile with Default=1
+    for (_path_str, (path, is_default, _name)) in profiles {
         if is_default && path.join("prefs.js").exists() {
             return Ok(path);
         }
